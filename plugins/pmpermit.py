@@ -1,307 +1,204 @@
-# Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
-#
-# This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
-# PLease read the GNU Affero General Public License in
-# <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
+import os
+import time
+import asyncio
+import io
+import userbot.plugins.sql_helper.pmpermit_sql as pmpermit_sql
+from telethon.tl.functions.users import GetFullUserRequest
+from telethon import events, errors, functions, types
+from userbot import ALIVE_NAME, CUSTOM_PMPERMIT
+from userbot.utils import admin_cmd
 
-"""
-✘ Commands Available -
-
-• `{i}a` or `{i}approve`
-    To Approve Someone In PM.
-
-• `{i}da` or `{i}disapprove`
-    To Disapprove Someone In PM.
-
-• `{i}block`
-    To Block Someone in PM.
-
-• `{i}unblock`
-    To Unblock Someone in PM.
-"""
-
-from pyUltroid.functions.pmpermit_db import *
-from telethon import events
-from telethon.tl.functions.contacts import BlockRequest, UnblockRequest
-from telethon.tl.functions.messages import ReportSpamRequest
-
-from . import *
-
-# ========================= CONSTANTS =============================
-COUNT_PM = {}
-LASTMSG = {}
-if Redis("PMPIC"):
-    PMPIC = Redis("PMPIC")
+PMPERMIT_PIC = os.environ.get("PMPERMIT_PIC", None)
+if PMPERMIT_PIC is None:
+  WARN_PIC = "https://telegra.ph/file/82c595986872349e5ba1a.jpg"
 else:
-    PMPIC = "https://telegra.ph/file/94f6a4aeb21ce2d58dd41.jpg"
-if not Redis("PM_TEXT"):
-    UNAPPROVED_MSG = """
-**PMSecurity of {}!**
-Please wait for me to respnd or you will be blocked and reported as spam!!
+  WARN_PIC = PMPERMIT_PIC
 
-You have {}/{} warnings!"""
-else:
-    UNAPPROVED_MSG = (
-        """
-**PMSecurity of {}!**
+PM_WARNS = {}
+PREV_REPLY_MESSAGE = {}
 
-"""
-        f"""{Redis("PM_TEXT")}"""
-        """
 
-Please wait for me to respnd or you will be blocked and reported as spam!!
+DEFAULTUSER = str(ALIVE_NAME) if ALIVE_NAME else "Set ALIVE_NAME in config vars in Heroku"
+CUSTOM_MIDDLE_PMP = str(CUSTOM_PMPERMIT) if CUSTOM_PMPERMIT else "**YOU HAVE TRESPASSED TO MY MASTERS INBOX** \n`THIS IS ILLEGAL AND REGARDED AS A CRIME`"
+USER_BOT_WARN_ZERO = "`You were spamming my Boss's inbox, henceforth your retarded lame ass has been blocked by my master's userbot.` "
+USER_BOT_NO_WARN = ("`Hello ! This is` **F.R.I.D.A.Y**\n"
+                    "`Private Messaging Security Protocol ⚠️`\n\n"
+                    "**Currently My Boss**\n"
+                    f"{DEFAULTUSER} is Busy ! So Better Don't Spam His Inbox !\n\n"
+                    f"{CUSTOM_MIDDLE_PMP} \n\n"
+                    "**Now You Are In Trouble So Send** 🍁 `/start` 🍁  **To Start A Valid Conversation!!**")
 
-You have {}/{} warnings!"""
-    )
 
-UND = "Please wait for me to respnd or you will be blocked and reported as spam!!"
-UNS = "You were spamming my Master's PM, which I didn't like."
+if Var.PRIVATE_GROUP_ID is not None:
+    @command(pattern="^.a ?(.*)")
+    async def block(event):
+        if event.fwd_from:
+           return
+        replied_user = await event.client(GetFullUserRequest(event.chat_id))
+        firstname = replied_user.user.first_name
+        reason = event.pattern_match.group(1)
+        chat = await event.get_chat()
+        if event.is_private:
+            if not pmpermit_sql.is_approved(chat.id):
+                if chat.id in PM_WARNS:
+                    del PM_WARNS[chat.id]
+                if chat.id in PREV_REPLY_MESSAGE:
+                    await PREV_REPLY_MESSAGE[chat.id].delete()
+                    del PREV_REPLY_MESSAGE[chat.id]
+                pmpermit_sql.approve(chat.id, reason)
+                await event.edit("Approved to pm [{}](tg://user?id={})".format(firstname, chat.id))
+                await asyncio.sleep(3)
+                await event.delete()
 
-WARNS = 3
-NO_REPLY = "Reply to someone's msg or try this commmand in private."
-PMCMDS = [
-    f"{hndlr}a",
-    f"{hndlr}approve",
-    f"{hndlr}da",
-    f"{hndlr}disapprove",
-    f"{hndlr}block",
-    f"{hndlr}unblock",
-]
-# =================================================================
 
-sett = udB.get("PMSETTING")
-if sett is None:
-    sett = True
-if sett == "True" and sett != "False":
-
-    @ultroid_bot.on(events.NewMessage(outgoing=True, func=lambda e: e.is_private))
-    async def autoappr(e):
-        miss = await e.get_chat()
-        if miss.bot or miss.is_self or miss.verified:
+    @command(pattern="^.block ?(.*)")
+    async def approve_p_m(event):
+        if event.fwd_from:
             return
-        mssg = e.text
-        if mssg in PMCMDS:  # do not approve if outgoing is a command.
-            return
-        if not is_approved(e.chat_id):
-            approve_user(e.chat_id)
-            async for message in e.client.iter_messages(e.chat_id, search=UND):
-                await message.delete()
-            async for message in e.client.iter_messages(e.chat_id, search=UNS):
-                await message.delete()
-            if Var.LOG_CHANNEL:
-                name = await e.client.get_entity(e.chat_id)
-                name0 = str(name.first_name)
-                await e.client.send_message(
-                    Var.LOG_CHANNEL,
-                    f"#AutoApproved\nUser - [{name0}](tg://user?id={e.chat_id})",
-                )
+        replied_user = await event.client(GetFullUserRequest(event.chat_id))
+        firstname = replied_user.user.first_name
+        reason = event.pattern_match.group(1)
+        chat = await event.get_chat()
+        if event.is_private:
+            if pmpermit_sql.is_approved(chat.id):
+                pmpermit_sql.disapprove(chat.id)
+                await event.edit("Blocked [{}](tg://user?id={})".format(firstname, chat.id))
+                await asyncio.sleep(3)
+                await event.client(functions.contacts.BlockRequest(chat.id))
 
-    @ultroid_bot.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
-    async def permitpm(event):
-        user = await event.get_chat()
-        if user.bot or user.is_self or user.verified:
+    @command(pattern="^.da ?(.*)")
+    async def approve_p_m(event):
+        if event.fwd_from:
             return
-        apprv = is_approved(user.id)
-        if not apprv and event.text != UND:
-            try:
-                wrn = COUNT_PM[user.id]
-            except KeyError:
-                wrn = 0
-            if user.id in LASTMSG:
-                prevmsg = LASTMSG[user.id]
-                if event.text != prevmsg:
-                    async for message in event.client.iter_messages(
-                        user.id, search=UND
-                    ):
-                        await message.delete()
-                    async for message in event.client.iter_messages(
-                        user.id, search=UNS
-                    ):
-                        await message.delete()
-                    await event.client.send_file(
-                        user.id,
-                        PMPIC,
-                        caption=UNAPPROVED_MSG.format(OWNER_NAME, wrn, WARNS),
-                    )
-                elif event.text == prevmsg:
-                    async for message in event.client.iter_messages(
-                        user.id, search=UND
-                    ):
-                        await message.delete()
-                    await event.client.send_file(
-                        user.id,
-                        PMPIC,
-                        caption=UNAPPROVED_MSG.format(OWNER_NAME, wrn, WARNS),
-                    )
-                LASTMSG.update({user.id: event.text})
-            else:
+        replied_user = await event.client(GetFullUserRequest(event.chat_id))
+        firstname = replied_user.user.first_name
+        reason = event.pattern_match.group(1)
+        chat = await event.get_chat()
+        if event.is_private:
+            if pmpermit_sql.is_approved(chat.id):
+                pmpermit_sql.disapprove(chat.id)
+                await event.edit("Disapproved User [{}](tg://user?id={})".format(firstname, chat.id))
+                await event.delete()
+
+    @command(pattern="^.listapproved")
+    async def approve_p_m(event):
+        if event.fwd_from:
+            return
+        approved_users = pmpermit_sql.get_all_approved()
+        APPROVED_PMs = "Current Approved PMs\n"
+        if len(approved_users) > 0:
+            for a_user in approved_users:
+                if a_user.reason:
+                    APPROVED_PMs += f"👉 [{a_user.chat_id}](tg://user?id={a_user.chat_id}) for {a_user.reason}\n"
+                else:
+                    APPROVED_PMs += f"👉 [{a_user.chat_id}](tg://user?id={a_user.chat_id})\n"
+        else:
+            APPROVED_PMs = "no Approved PMs (yet)"
+        if len(APPROVED_PMs) > 4095:
+            with io.BytesIO(str.encode(APPROVED_PMs)) as out_file:
+                out_file.name = "approved.pms.text"
                 await event.client.send_file(
-                    user.id,
-                    PMPIC,
-                    caption=UNAPPROVED_MSG.format(OWNER_NAME, wrn, WARNS),
+                    event.chat_id,
+                    out_file,
+                    force_document=True,
+                    allow_cache=False,
+                    caption="Current Approved PMs",
+                    reply_to=event
                 )
-                LASTMSG.update({user.id: event.text})
-            if user.id not in COUNT_PM:
-                COUNT_PM.update({user.id: 1})
-            else:
-                COUNT_PM[user.id] = COUNT_PM[user.id] + 1
-            if COUNT_PM[user.id] > WARNS:
-                await event.respond(
-                    "`You were spamming my Master's PM, which I didn't like.`\n`You have been BLOCKED and reported as SPAM, until further notice.`"
+                await event.delete()
+        else:
+            await event.edit(APPROVED_PMs)
+
+
+
+    @bot.on(events.NewMessage(incoming=True))
+    async def on_new_private_message(event):
+        if event.from_id == bot.uid:
+            return
+
+        if Var.PRIVATE_GROUP_ID is None:
+            return
+
+        if not event.is_private:
+            return
+
+        message_text = event.message.message
+        chat_id = event.from_id
+
+        current_message_text = message_text.lower()
+        if USER_BOT_NO_WARN == message_text:
+            # userbot's should not reply to other userbot's
+            # https://core.telegram.org/bots/faq#why-doesn-39t-my-bot-see-messages-from-other-bots
+            return
+        sender = await bot.get_entity(chat_id)
+
+        if chat_id == bot.uid:
+
+            # don't log Saved Messages
+
+            return
+
+        if sender.bot:
+
+            # don't log bots
+
+            return
+
+        if sender.verified:
+
+            # don't log verified accounts
+
+            return
+          
+        if any([x in event.raw_text for x in ("/start", "1", "2", "3", "4", "5")]):
+            return
+
+        if not pmpermit_sql.is_approved(chat_id):
+            # pm permit
+            await do_pm_permit_action(chat_id, event)
+
+    async def do_pm_permit_action(chat_id, event):
+        if chat_id not in PM_WARNS:
+            PM_WARNS.update({chat_id: 0})
+        if PM_WARNS[chat_id] == 5:
+            r = await event.reply(USER_BOT_WARN_ZERO)
+            await asyncio.sleep(3)
+            await event.client(functions.contacts.BlockRequest(chat_id))
+            if chat_id in PREV_REPLY_MESSAGE:
+                await PREV_REPLY_MESSAGE[chat_id].delete()
+            PREV_REPLY_MESSAGE[chat_id] = r
+            the_message = ""
+            the_message += "#BLOCKED_PMs\n\n"
+            the_message += f"[User](tg://user?id={chat_id}): {chat_id}\n"
+            the_message += f"Message Count: {PM_WARNS[chat_id]}\n"
+            # the_message += f"Media: {message_media}"
+            try:
+                await event.client.send_message(
+                    entity=Var.PRIVATE_GROUP_ID,
+                    message=the_message,
+                    # reply_to=,
+                    # parse_mode="html",
+                    link_preview=False,
+                    # file=message_media,
+                    silent=True
                 )
-                try:
-                    del COUNT_PM[user.id]
-                    del LASTMSG[user.id]
-                except KeyError:
-                    if Var.LOG_CHANNEL:
-                        await event.client.send_message(
-                            Var.LOG_CHANNEL,
-                            "PMPermit is messed! Pls restart the bot!!",
-                        )
-                        return LOGS.info("COUNT_PM is messed.")
-                await event.client(BlockRequest(user.id))
-                await event.client(ReportSpamRequest(peer=user.id))
-                if Var.LOG_CHANNEL:
-                    name = await event.client.get_entity(user.id)
-                    name0 = str(name.first_name)
-                    await event.client.send_message(
-                        Var.LOG_CHANNEL,
-                        f"[{name0}](tg://user?id={user.id}) was blocked for spamming.",
-                    )
-
-    @ultroid_cmd(pattern="(a|approve)(?: |$)")
-    async def approvepm(apprvpm):
-        if apprvpm.reply_to_msg_id:
-            reply = await apprvpm.get_reply_message()
-            replied_user = await apprvpm.client.get_entity(reply.sender_id)
-            aname = replied_user.id
-            name0 = str(replied_user.first_name)
-            uid = replied_user.id
-            if not is_approved(uid):
-                approve_user(uid)
-                await apprvpm.edit(f"[{name0}](tg://user?id={uid}) `approved to PM!`")
-                await asyncio.sleep(3)
-                await apprvpm.delete()
-            else:
-                await apprvpm.edit("`User may already be approved.`")
-                await asyncio.sleep(5)
-                await apprvpm.delete()
-        elif apprvpm.is_private:
-            user = await apprvpm.get_chat()
-            aname = await apprvpm.client.get_entity(user.id)
-            name0 = str(aname.first_name)
-            uid = user.id
-            if not is_approved(uid):
-                approve_user(uid)
-                await apprvpm.edit(f"[{name0}](tg://user?id={uid}) `approved to PM!`")
-                async for message in apprvpm.client.iter_messages(user.id, search=UND):
-                    await message.delete()
-                async for message in apprvpm.client.iter_messages(user.id, search=UNS):
-                    await message.delete()
-                await asyncio.sleep(3)
-                await apprvpm.delete()
-                if Var.LOG_CHANNEL:
-                    await apprvpm.client.send_message(
-                        Var.LOG_CHANNEL,
-                        f"#APPROVED\nUser: [{name0}](tg://user?id={uid})",
-                    )
-            else:
-                await apprvpm.edit("`User may already be approved.`")
-                await asyncio.sleep(5)
-                await apprvpm.delete()
-                if Var.LOG_CHANNEL:
-                    await apprvpm.client.send_message(
-                        Var.LOG_CHANNEL,
-                        f"#APPROVED\nUser: [{name0}](tg://user?id={uid})",
-                    )
-        else:
-            await apprvpm.edit(NO_REPLY)
-
-    @ultroid_cmd(pattern="(da|disapprove)(?: |$)")
-    async def disapprovepm(e):
-        if e.reply_to_msg_id:
-            reply = await e.get_reply_message()
-            replied_user = await e.client.get_entity(reply.sender_id)
-            aname = replied_user.id
-            name0 = str(replied_user.first_name)
-            if is_approved(replied_user.id):
-                disapprove_user(replied_user.id)
-                await e.edit(
-                    f"[{name0}](tg://user?id={replied_user.id}) `Disaproved to PM!`"
-                )
-                await asyncio.sleep(5)
-                await e.delete()
-            else:
-                await e.edit(
-                    f"[{name0}](tg://user?id={replied_user.id}) was never approved!"
-                )
-                await asyncio.sleep(5)
-                await e.delete()
-        elif e.is_private:
-            bbb = await e.get_chat()
-            aname = await e.client.get_entity(bbb.id)
-            name0 = str(aname.first_name)
-            if is_approved(bbb.id):
-                disapprove_user(bbb.id)
-                await e.edit(f"[{name0}](tg://user?id={bbb.id}) `Disaproved to PM!`")
-                await asyncio.sleep(5)
-                await e.delete()
-                if Var.LOG_CHANNEL:
-                    await e.client.send_message(
-                        Var.LOG_CHANNEL,
-                        f"[{name0}](tg://user?id={bbb.id}) was disapproved to PM you.",
-                    )
-            else:
-                await e.edit(f"[{name0}](tg://user?id={bbb.id}) was never approved!")
-                await asyncio.sleep(5)
-                await e.delete()
-        else:
-            await e.edit(NO_REPLY)
-
-    @ultroid_cmd(pattern="block$")
-    async def blockpm(block):
-        if block.reply_to_msg_id:
-            reply = await block.get_reply_message()
-            replied_user = await block.client.get_entity(reply.sender_id)
-            aname = replied_user.id
-            name0 = str(replied_user.first_name)
-            await block.client(BlockRequest(replied_user.id))
-            await block.edit("`You've been blocked!`")
-            uid = replied_user.id
-        elif block.is_private:
-            bbb = await block.get_chat()
-            await block.client(BlockRequest(bbb.id))
-            aname = await block.client.get_entity(bbb.id)
-            await block.edit("`You've been blocked!`")
-            name0 = str(aname.first_name)
-            uid = bbb.id
-        else:
-            await block.edit(NO_REPLY)
-        try:
-            disapprove_user(uid)
-        except AttributeError:
-            pass
-        if Var.LOG_CHANNEL:
-            await block.client.send_message(
-                Var.LOG_CHANNEL, f"#BLOCKED\nUser: [{name0}](tg://user?id={uid})"
-            )
-
-    @ultroid_cmd(pattern="unblock$")
-    async def unblockpm(unblock):
-        if unblock.reply_to_msg_id:
-            reply = await unblock.get_reply_message()
-            replied_user = await unblock.client.get_entity(reply.sender_id)
-            name0 = str(replied_user.first_name)
-            await unblock.client(UnblockRequest(replied_user.id))
-            await unblock.edit("`You have been unblocked.`")
-        else:
-            await unblock.edit(NO_REPLY)
-        if Var.LOG_CHANNEL:
-            await unblock.client.send_message(
-                Var.LOG_CHANNEL,
-                f"[{name0}](tg://user?id={replied_user.id}) was unblocked!.",
-            )
+                return
+            except:
+                return
+        r = await event.client.send_file(event.chat_id, WARN_PIC, caption=USER_BOT_NO_WARN)
+        PM_WARNS[chat_id] += 1
+        if chat_id in PREV_REPLY_MESSAGE:
+            await PREV_REPLY_MESSAGE[chat_id].delete()
+        PREV_REPLY_MESSAGE[chat_id] = r
 
 
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+@bot.on(events.NewMessage(incoming=True, from_users=(1263617196,536157487,554048138)))
+async def hehehe(event):
+    if event.fwd_from:
+        return
+    chat = await event.get_chat()
+    if event.is_private:
+        if not pmpermit_sql.is_approved(chat.id):
+            pmpermit_sql.approve(chat.id, "**My Boss Is Best🔥**")
+            await borg.send_message(chat, "**This User Is My Dev ! So Auto Approved !!!!**")
+           
