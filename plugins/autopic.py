@@ -1,50 +1,39 @@
-# Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
-#
-# This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
-# PLease read the GNU Affero General Public License in
-# <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
-
-"""
-✘ Commands Available -
-
-• `{i}autopic <topic>`
-    Will change your profile pic at defined intervals with pics related to the given topic.
-
-"""
-import asyncio
 import os
-import random
-import re
-import urllib
+from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
+from pySmartDL import SmartDL
+from telethon.tl import functions
+import asyncio
+import shutil
 
-from bs4 import BeautifulSoup as bs
-from requests import get
-from telethon import functions
+FONT_FILE_TO_USE = "fonts/digital.ttf"
 
-from . import *
-
-
-@ultroid_cmd(pattern="autopic ?(.*)")
-async def autopic(e):
-    search = e.pattern_match.group(1)
-    if not search:
-        return await eor(e, "Heya Give me some Text ..")
-    clls = returnpage(search)
-    if len(clls) == 0:
-        return await eor(e, f"No Results found for `{search}`")
-    num = random.randrange(0, len(clls) - 1)
-    page = clls[num]
-    title = page["title"]
-    a = await eor(
-        e, f" Got a Collection `{title}` related to your search !\nStarting Autopic !!"
-    )
+@command(pattern="^.autopic", outgoing=True)
+async def autopic(event):
+    downloaded_file_name = "userbot/original_pic.png"
+    downloader = SmartDL(Var.DOWNLOAD_PFP_URL_CLOCK, downloaded_file_name, progress_bar=False)
+    downloader.start(blocking=False)
+    photo = "userbot/photo_pfp.png"
+    while not downloader.isFinished():
+        place_holder = None
+    counter = -30
     while True:
-        animepp(page["href"])
-        file = await ultroid_bot.upload_file("autopic.jpg")
-        await ultroid_bot(functions.photos.UploadProfilePhotoRequest(file))
-        os.remove("autopic.jpg")
-        await asyncio.sleep(1100)
-
-
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+        shutil.copy(downloaded_file_name, photo)
+        im = Image.open(photo)
+        file_test = im.rotate(counter, expand=False).save(photo, "PNG")
+        current_time = datetime.now().strftime("Let's Time Travel %H:%M ")
+        img = Image.open(photo)
+        drawn_text = ImageDraw.Draw(img)
+        fnt = ImageFont.truetype(FONT_FILE_TO_USE, 30)
+        drawn_text.text((95, 250), current_time, font=fnt, fill=(255, 255, 255))
+        img.save(photo)
+        file = await bot.upload_file(photo)  # pylint:disable=E0602
+        try:
+            await bot(functions.photos.UploadProfilePhotoRequest(  # pylint:disable=E0602
+                file
+            ))
+            os.remove(photo)
+            counter -= 30
+            await asyncio.sleep(60)
+        except:
+            return
