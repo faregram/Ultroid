@@ -1,5 +1,5 @@
-# Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
+# Prime - UserBot
+# Copyright (C) 2020 PrimeUserbot
 # This file is a part of < https://github.com/faregram/Ultroid/ >
 # PLease read the GNU Affero General Public License in <https://github.com/faregram/Ultroid/blob/main/LICENSE/>.
 
