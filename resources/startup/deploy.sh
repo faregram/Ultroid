@@ -1,9 +1,9 @@
 # Ultroid - UserBot
 # Copyright (C) 2020 TeamUltroid
 #
-# This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
+# This file is a part of < https://github.com/faregram/Ultroid/ >
 # PLease read the GNU Affero General Public License in
-# <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
+# <https://github.com/faregram/Ultroid/blob/main/LICENSE/>.
 
 echo "
 	      ╔╦╦╦══╦═╦═╦══╦══╗
@@ -67,7 +67,7 @@ echo '
         •• Cloning Repository
 '
 
-git clone https://github.com/Teamultroid/Ultroid.git /root/TeamUltroid/
+git clone https://github.com/faregram/Ultroid/
 
 echo '
 	•• Getting Libraries and Installing
@@ -85,5 +85,5 @@ echo "
 
 			•°• Deployed Successfully °•°
 		   •• Wait till python images are pushed
-	   •• Give build logs in @UltroidSupport if build fails
+	   •• Give build logs in @PrimeUserbotSupport if build fails
 "
